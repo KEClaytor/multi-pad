@@ -1,5 +1,4 @@
-# Trinket IO demo
-# Welcome to CircuitPython 3.1.1 :)
+# Trellis pad with 14-segement display
 
 import time
 import busio
@@ -14,22 +13,85 @@ i2c = busio.I2C(board.SCL, board.SDA)
 trellis = adafruit_trellis.Trellis(i2c)
 display = adafruit_ht16k33.segments.Seg14x4(i2c, address=0x72)
 
+class Button():
+    """ Button convience class.
+
+    Create a button:
+    >>> button = Button(board.D3, digitalio.Pull.UP)
+    Update the button state:
+    >>> button.update()
+    And then check for conditions:
+    >>> if button.pressed():
+    >>>     ...
+    >>> if button.just_pressed():
+    >>>     ...
+    >>> if button.just_released():
+    >>>     ...
+    """
+
+    def __init__(self, pin, mode):
+        """ Create a new Button.
+        """
+        self.button = digitalio.DigitalInOut(pin)
+        self.button.switch_to_input(pull=mode)
+        self.mode = mode
+        self.last_state = False
+        self.state = False
+
+    def update(self):
+        """ Read the current button state and update internal state.
+        """
+        # Update the last state
+        self.last_state = self.state
+        # Read the current state
+        if self.mode == digitalio.Pull.DOWN:
+            self.state = self.button.value
+        elif self.mode == digitalio.Pull.UP:
+            self.state = not self.button.value
+        # Update the pressed / released states
+        self.edge_up = self.state and not self.last_state
+        self.edge_down = not self.state and self.last_state
+
+    def pressed(self):
+        """ Returns true if currently pressed.
+        """
+        return self.state
+
+    def just_pressed(self):
+        """ Returns true if just pressed
+        True for released -> pressed transition.
+        """
+        return self.edge_up
+
+    def just_released(self):
+        """ Returns true if just released
+        True for pressed -> released transition.
+        """
+        return self.edge_down
+
+
 # Button
-button = digitalio.DigitalInOut(board.D3)
-button.switch_to_input(pull=digitalio.Pull.UP)
+button_mode = Button(board.D3, digitalio.Pull.UP)
+button_sel = Button(board.D4, digitalio.Pull.UP)
 
 trellis.led.fill(True)
 display.fill(0)
 display.show()
 
+
 # Defines
+MODE = 0
 FREE = 0
 GAME = 1
 ADD = 2
-MULT = 3
-CALC = 4
-MODES = [FREE, GAME, ADD]
-MODE = ADD
+SUB = 3
+MODE_LABELS = ["FREE", "GAME", "ADD ", "SUB "]
+addition_goal = 16
+subtraction_goal = 16
+
+
+def init_free():
+    trellis.led.fill(False)
 
 
 def logic_free():
@@ -37,27 +99,20 @@ def logic_free():
 
     Trellis button press changes LED state.
     """
-    try:
-        just_pressed, released = trellis.read_buttons()
-        for b in just_pressed:
-            print('pressed:', b)
-            # trellis.led[b] = True
-            trellis.led[b] = not trellis.led[b]
-        pressed_buttons.update(just_pressed)
-        for b in released:
-            print('released:', b)
-            # trellis.led[b] = False
-        pressed_buttons.difference_update(released)
-        for b in pressed_buttons:
-            print('still pressed:', b)
-            # trellis.led[b] = True
-    except Exception as ex:
-        print("exception with trellis: ", ex)
+    just_pressed, released = trellis.read_buttons()
+    for b in just_pressed:
+        print('pressed:', b)
+        # trellis.led[b] = True
+        trellis.led[b] = not trellis.led[b]
+    pressed_buttons.update(just_pressed)
+    for b in released:
+        print('released:', b)
+        # trellis.led[b] = False
+    pressed_buttons.difference_update(released)
+    for b in pressed_buttons:
+        print('still pressed:', b)
+        # trellis.led[b] = True
 
-    try:
-        display.print("FREE")
-    except Exception as ex:
-        print("exception with ht16k33: ", ex)
 
 
 def game_button_press(b):
@@ -96,13 +151,7 @@ def logic_game():
     try:
         just_pressed, released = trellis.read_buttons()
         for b in just_pressed:
-            pass
-        pressed_buttons.update(just_pressed)
-        for b in released:
             game_button_press(b)
-        pressed_buttons.difference_update(released)
-        for b in pressed_buttons:
-            pass
     except Exception as ex:
         print("exception with trellis: ", ex)
 
@@ -116,15 +165,19 @@ def init_add():
     """ Create a new addition problem
 
     Choose a + b = c such that a, b < 10, and c <= 16
+    These conditions ensure that "a+b=" is pritable, and reachable
     """
+    global addition_goal
+
     trellis.led.fill(False)
     a = random.randint(1, 10)
     b = random.randint(1, 16-a)
     if b > 9:
         b = 9
+    c = a + b
     display.print("{a:d}+{b:d}=".format(a=a, b=b))
-    print(a, b, a+b)
-    return a+b
+    print(a, b, c)
+    addition_goal = c
 
 
 def get_active():
@@ -133,46 +186,98 @@ def get_active():
     return [ii for ii in range(16) if trellis.led[ii]]
 
 
-def logic_add(c):
+def logic_add():
     """ Game play
 
-    Trellis button press inverts button and neighbors.
+    Toggle buttons and see if we "win".
     """
-    try:
-        just_pressed, released = trellis.read_buttons()
-        for b in just_pressed:
-            trellis.led[b] = not trellis.led[b]
-        pressed_buttons.update(just_pressed)
-        for b in released:
-            pass
-        pressed_buttons.difference_update(released)
-        for b in pressed_buttons:
-            pass
-    except Exception as ex:
-        print("exception with trellis: ", ex)
+    global addition_goal
+
+    just_pressed, released = trellis.read_buttons()
+    for b in just_pressed:
+        trellis.led[b] = not trellis.led[b]
 
     active = get_active()
-    print(len(active), c, active)
-    if len(active) == c:
-        try:
-            display.print(" ={c:2d}".format(c=c))
-        except Exception as ex:
-            print("exception with ht16k33: ", ex)
-        time.sleep(1)
-        blink_win(active)
+    print(len(active), addition_goal)
+    if len(active) == addition_goal:
+        display.print(" ={c:2d}".format(c=addition_goal))
+        for b in range(16):
+            trellis.led[b] = not trellis.led[b]
 
 
-# init_game()
-c = init_add()
+def init_sub():
+    """ Create a new subtraction problem
+
+    Choose a - b = c such that a > 1, b > 0, and c > 0
+    """
+    global subtraction_goal
+
+    trellis.led.fill(False)
+    a = random.randint(1, 10)
+    b = random.randint(0, a)
+    c = a - b
+    display.print("{a:d}-{b:d}=".format(a=a, b=b))
+    print(a, b, c)
+    subtraction_goal = c
+
+
+def logic_sub():
+    """ Game play
+
+    Toggle buttons and see if we "win".
+    """
+    global subtraction_goal
+
+    just_pressed, released = trellis.read_buttons()
+    for b in just_pressed:
+        trellis.led[b] = not trellis.led[b]
+
+    active = get_active()
+    if len(active) == subtraction_goal:
+        display.print(" ={c:2d}".format(c=subtraction_goal))
+        for b in range(16):
+            trellis.led[b] = not trellis.led[b]
+
+
+def init():
+    """ Initalize the give mode.
+    """
+    if MODE == FREE:
+        init_free()
+    elif MODE == GAME:
+        init_game()
+    elif MODE == ADD:
+        init_add()
+    elif MODE == SUB:
+        init_sub()
+
+
+init()
+display.print(MODE_LABELS[MODE])
 pressed_buttons = set()
 while True:
-    # Check for mode increment
+    # Change modes
+    button_mode.update()
+    button_sel.update()
 
+    if button_mode.pressed():
+        if button_sel.just_released():
+            MODE = (MODE + 1) % len(MODE_LABELS)
+        display.print(MODE_LABELS[MODE])
+    else:
+        if button_mode.just_released():
+            init()
+        if button_sel.just_released():
+            init()
+
+    # Main logic
     if MODE == FREE:
         logic_free()
     elif MODE == GAME:
         logic_game()
     elif MODE == ADD:
-        logic_add(c)
+        logic_add()
+    elif MODE == SUB:
+        logic_sub()
 
     time.sleep(.1)
