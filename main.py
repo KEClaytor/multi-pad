@@ -75,9 +75,6 @@ button_mode = Button(board.D3, digitalio.Pull.UP)
 button_sel = Button(board.D4, digitalio.Pull.UP)
 
 trellis.led.fill(True)
-display.fill(0)
-display.show()
-
 
 # Defines
 MODE = 0
@@ -101,18 +98,7 @@ def logic_free():
     """
     just_pressed, released = trellis.read_buttons()
     for b in just_pressed:
-        print('pressed:', b)
-        # trellis.led[b] = True
         trellis.led[b] = not trellis.led[b]
-    pressed_buttons.update(just_pressed)
-    for b in released:
-        print('released:', b)
-        # trellis.led[b] = False
-    pressed_buttons.difference_update(released)
-    for b in pressed_buttons:
-        print('still pressed:', b)
-        # trellis.led[b] = True
-
 
 
 def game_button_press(b):
@@ -148,17 +134,9 @@ def logic_game():
 
     Trellis button press inverts button and neighbors.
     """
-    try:
-        just_pressed, released = trellis.read_buttons()
-        for b in just_pressed:
-            game_button_press(b)
-    except Exception as ex:
-        print("exception with trellis: ", ex)
-
-    try:
-        display.print("GAME")
-    except Exception as ex:
-        print("exception with ht16k33: ", ex)
+    just_pressed, released = trellis.read_buttons()
+    for b in just_pressed:
+        game_button_press(b)
 
 
 def init_add():
@@ -240,7 +218,7 @@ def logic_sub():
 
 
 def init():
-    """ Initalize the give mode.
+    """ Initalize the given mode.
     """
     if MODE == FREE:
         init_free()
@@ -265,9 +243,7 @@ while True:
             MODE = (MODE + 1) % len(MODE_LABELS)
         display.print(MODE_LABELS[MODE])
     else:
-        if button_mode.just_released():
-            init()
-        if button_sel.just_released():
+        if button_mode.just_released() or button_sel.just_released():
             init()
 
     # Main logic
