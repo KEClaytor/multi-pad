@@ -14,7 +14,7 @@ trellis = adafruit_trellis.Trellis(i2c)
 display = adafruit_ht16k33.segments.Seg14x4(i2c, address=0x72)
 
 class Button():
-    """ Button convience class.
+    """ Button convenience class.
 
     Create a button:
     >>> button = Button(board.D3, digitalio.Pull.UP)
@@ -148,7 +148,7 @@ def init_add():
     global addition_goal
 
     trellis.led.fill(False)
-    a = random.randint(1, 10)
+    a = random.randint(1, 9)
     b = random.randint(1, 16-a)
     if b > 9:
         b = 9
@@ -191,7 +191,7 @@ def init_sub():
     global subtraction_goal
 
     trellis.led.fill(False)
-    a = random.randint(1, 10)
+    a = random.randint(1, 9)
     b = random.randint(0, a)
     c = a - b
     display.print("{a:d}-{b:d}=".format(a=a, b=b))
@@ -238,13 +238,11 @@ while True:
     button_mode.update()
     button_sel.update()
 
-    if button_mode.pressed():
-        if button_sel.just_released():
-            MODE = (MODE + 1) % len(MODE_LABELS)
+    if button_mode.just_released():
+        MODE = (MODE + 1) % len(MODE_LABELS)
         display.print(MODE_LABELS[MODE])
-    else:
-        if button_mode.just_released() or button_sel.just_released():
-            init()
+    if button_sel.just_released():
+        init()
 
     # Main logic
     if MODE == FREE:
